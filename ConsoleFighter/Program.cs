@@ -1,8 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace ConsoleFighter {
     class Program {
@@ -16,6 +12,7 @@ namespace ConsoleFighter {
                 Controller.StartFight();
 
             }catch(Exception E) {
+                Console.ResetColor();
                 Console.Clear();
                 Console.WriteLine("- Erro durante a execução...\n\n" +
                     "Mensagem: {0}\n\n" +

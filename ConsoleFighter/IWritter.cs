@@ -1,9 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.ComponentModel;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace ConsoleFighter {
 
@@ -14,15 +9,17 @@ namespace ConsoleFighter {
 
     public interface IWritter {
 
-        void WriteRing();
-        void Attack();
-        void Defend();
-        void StayNormal(ref int Pos, PlayerSide Side);
-        void AddAttackPoint();
-        void SubtractAttackPoint();
-        void AddDefensePoint();
-        void SubtractDefensePoint();
-        void SubtractLife();
-        void DeadCharacter();
+        void WriteRing(int Life, int Chi);
+        void ResizeRing(int Width);
+        void Attack(int Pos, PlayerSide Side);
+        void Defend(int Pos, PlayerSide Side);
+        int StayNormal(ref int Pos, PlayerSide Side, ConsoleColor Color = ConsoleColor.Black, bool EraseAtkDef = false);
+        void ChiPoint(int ChiAvailable, PlayerSide Side);
+        void DeadCharacter(PlayerSide Side);
+        void ReceiveDamage(int Life, PlayerSide Side, ref int Pos, bool Especial);
+        bool IsAtEdge(int Pos);
+        int Menu();
+        void RestartValues();
+
     }
 }

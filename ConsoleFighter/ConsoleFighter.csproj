@@ -43,7 +43,6 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="DeadCharacterException.cs" />
     <Compile Include="FightController.cs" />
     <Compile Include="IWritter.cs" />
     <Compile Include="Player.cs" />

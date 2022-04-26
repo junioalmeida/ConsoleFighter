@@ -1,13 +1,10 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Diagnostics.Eventing.Reader;
-using System.Linq;
-using System.Text;
 using System.Threading;
-using System.Threading.Tasks;
 
 namespace ConsoleFighter {
-    class Player {
+    public class Player {
+
+        public static Player PlayerDied { get; private set; }
 
         private readonly object SyncAtkDefMove = new object();
 
@@ -23,179 +20,147 @@ namespace ConsoleFighter {
         }
 
         public bool DefendingState { get; private set; }
-        public int AtkAvailable { get; set; }
-        public int DefAvailable { get; private set; }
+        public bool IsBeingAttacking { get; private set; }
+        public int ChiAvailable { get; set; }
 
-        private PlayerSide Side;
+        public PlayerSide Side { get; private set; }
 
-        private IWritter Write;
+        private readonly IWritter Write;
 
-        private Thread AttackThread;
-        private Thread DefenseThread;
+        private Thread Chi;
 
-        public Player(int initialPosition, PlayerSide Side) {
+        public Player(int initialPosition, PlayerSide Side, int HealthPoints) {
             Write = Writter.GetInstance();
 
-            HealthPoints = 9;
+            this.HealthPoints = HealthPoints;
+
             Position = initialPosition;
-            AtkAvailable = 3;
-            DefAvailable = 2;
             DefendingState = false;
             this.Side = Side;
-
-            AttackThread = new Thread(GenerateAtk);
-            DefenseThread = new Thread(GenerateDef);
-
-            AttackThread.Name = "GenarateAtk";
-            DefenseThread.Name = "GenerateDef";
-
-            AttackThread.Start();
-            DefenseThread.Start();
-
-            Write.StayNormal(ref _Position, Side);
+            ChiAvailable = 1;
         }
 
-        public void Move(bool ToRight) {
-            lock (SyncAtkDefMove) {
-                if (ToRight)
-                    Position++;
-                else
-                    Position--;
+        public void RestartPlayer(int InitialPosition, int HealthPoints, bool RestartChi = false) {
 
-                Write.StayNormal(ref _Position, Side);
+            lock (SyncAtkDefMove) {
+                if (Chi != null && Chi.IsAlive) {
+                    Chi.Abort();
+                }
+            }
+
+            PlayerDied = null;
+
+            Position = InitialPosition;
+            DefendingState = false;
+            ChiAvailable = 1;
+            this.HealthPoints = HealthPoints;
+
+            Write.StayNormal(ref _Position, Side);
+
+            if (RestartChi) {
+                Chi = new Thread(GenerateChi) {
+                    Name = "GenerateChi" + Side.ToString()
+                };
+
+                Chi.Start();
             }
         }
 
-        public void Attack() {
+        public int Move(bool ToRight) {
+            int toghter;
 
-            bool lockTaken = false;
+            while (true) {
 
-            try {
-                Monitor.Enter(SyncAtkDefMove, ref lockTaken);
+                lock (SyncAtkDefMove) {
+                    if (!IsBeingAttacking) {
+                        if (ToRight)
+                            Position++;
+                        else
+                            Position--;
 
-                if (AtkAvailable > 0) {
+                        if (DefendingState) {
+                            toghter = Write.StayNormal(ref _Position, Side, ConsoleColor.Black, true);
+                            DefendingState = false;
+                        } else
+                            toghter = Write.StayNormal(ref _Position, Side);
 
-                    AtkAvailable--;
-
-                    Write.Attack();
-                    Write.SubtractAttackPoint();
-
-                    // ---------------------------------
-                    // <<< Dar dano no outro jogador >>>
-                    // ---------------------------------
-
-                    Write.StayNormal(ref _Position, Side);
+                        return toghter;
+                    }
                 }
+            }
+        }
 
-                Monitor.PulseAll(SyncAtkDefMove);
+        private void GenerateChi() {
 
-            } finally {
-                if (lockTaken)
-                    Monitor.Exit(SyncAtkDefMove);
+            while (PlayerDied == null) {
+
+                Thread.Sleep(3000);
+
+                if (PlayerDied == null) {
+                    lock (SyncAtkDefMove) {
+                        if (ChiAvailable < 5) {
+                            Write.ChiPoint(ChiAvailable + 1, Side);
+                            ChiAvailable++;
+                        } else {
+                            Monitor.Wait(SyncAtkDefMove);
+                        }
+                    }
+                }
+            }
+        }
+
+        public void Attack(object IsEspecial) {
+
+            for (int i = 0; i < 1; i++) {
+                lock (SyncAtkDefMove) {
+
+                    if ((bool)IsEspecial) {
+                        if (ChiAvailable >= 2) {
+                            ChiAvailable -= 2;
+                            Write.ChiPoint(ChiAvailable, Side);
+                        } else
+                            break;
+
+                        Monitor.PulseAll(SyncAtkDefMove);
+                    }
+
+                    DefendingState = false;
+
+                    Write.Attack(_Position, Side);
+
+                    Thread.Sleep(100);
+
+                    Write.StayNormal(ref _Position, Side, ConsoleColor.Black, true);
+                }
             }
         }
 
         public void Defend() {
+            lock (SyncAtkDefMove) {
 
-            bool lockTaken = false;
+                if (!DefendingState) {
 
-            try {
+                    Write.Defend(_Position, Side);
 
-                Monitor.Enter(SyncAtkDefMove, ref lockTaken);
-
-                if (DefAvailable > 0) {
-
-                    DefAvailable--;
                     DefendingState = true;
-
-                    Write.Defend();
-                    Write.SubtractDefensePoint();
-
-                    Thread.Sleep(200);
-
-                    DefendingState = false;
-                    Write.StayNormal(ref _Position, Side);
                 }
-
-                Monitor.PulseAll(SyncAtkDefMove);
-
-            } finally {
-                if (lockTaken)
-                    Monitor.Exit(SyncAtkDefMove);
             }
 
         }
-        private void GenerateAtk() {
+                                                 
+        public void ReceiveDamage(int AmountDamege, bool Especial = false) {
 
-            bool lockTaken;
+            lock (SyncAtkDefMove) {
+                IsBeingAttacking = true;
 
-            while (true) {
+                HealthPoints -= AmountDamege;
+                Write.ReceiveDamage(HealthPoints, Side, ref _Position, Especial);
 
-                lockTaken = false;
-
-                try {
-
-                    Monitor.Enter(SyncAtkDefMove, ref lockTaken);
-
-                    if (!(AtkAvailable >= 6)) {
-                        AtkAvailable++;
-                        Write.AddAttackPoint();
-
-                        Monitor.Exit(SyncAtkDefMove);
-                        lockTaken = false;
-
-                        Thread.Sleep(3000);
-                    } else {
-                        while (AtkAvailable >= 6)
-                            Monitor.Wait(SyncAtkDefMove);
-                    }
-
-                } finally {
-                    if (lockTaken)
-                        Monitor.Exit(SyncAtkDefMove);
+                if (HealthPoints <= 0) {
+                    PlayerDied = this;
                 }
-            }
-        }
 
-        private void GenerateDef() {
-
-            bool lockTaken;
-
-            while (true) {
-
-                lockTaken = false;
-
-                try {
-                    Monitor.Enter(SyncAtkDefMove, ref lockTaken);
-
-                    if (!(DefAvailable >= 6)) {
-
-                        DefAvailable++;
-                        Write.AddDefensePoint();
-
-                        Monitor.Exit(SyncAtkDefMove);
-                        lockTaken = false;
-
-                        Thread.Sleep(500);
-                    } else {
-
-                        while (DefAvailable >= 6)
-                            Monitor.Wait(SyncAtkDefMove);
-                    }
-
-                } finally {
-                    if (lockTaken)
-                        Monitor.Exit(SyncAtkDefMove);
-                }
-            }
-        }
-
-        public void ReceiveDamage(int AmountDamege) {
-            HealthPoints -= AmountDamege;
-            Write.SubtractLife();
-
-            if (HealthPoints <= 0) {
-                throw new DeadCharacterException(this);
+                IsBeingAttacking = false;
             }
         }
     }
